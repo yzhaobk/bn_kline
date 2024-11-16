@@ -47,5 +47,5 @@ def download_binance_kline(symbol: str, freq: str, date: str):
         print(f"下载失败，HTTP 错误码: {response.status_code}")
 
 
-# 示例调用：
-download_binance_kline("BTCUSDT", "1m", "2024-11-10")
+if __name__ == "__main__":
+    download_binance_kline("BTCUSDT", "1m", "2024-11-10")
