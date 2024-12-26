@@ -1,11 +1,12 @@
 import pandas as pd
 
-from downloader import get_path
+from downloader import get_path, MarketType, download_spot_kline, download_cm_kline, download_um_kline
 
 
-def load_binance_kline(symbol: str, freq: str, date: str) -> pd.DataFrame:
+def load_binance_kline(market_type: MarketType, symbol: str, freq: str, date: str) -> pd.DataFrame:
     """
     从本地文件加载 Binance K 线数据
+    :param market_type:
     :param symbol:
     :param freq:
     :param date:
@@ -20,7 +21,7 @@ def load_binance_kline(symbol: str, freq: str, date: str) -> pd.DataFrame:
     buy_base_volume: 买入量 按照 base 计量
     buy_quote_volume: 买入量 按照 quote 计量
     """
-    path = get_path(symbol, freq, date)
+    path = get_path(market_type, symbol, freq, date)
 
     # 定义小写列名
     col_names = [
@@ -43,15 +44,23 @@ def load_binance_kline(symbol: str, freq: str, date: str) -> pd.DataFrame:
     return df
 
 
-def read_binance_kiline(symbol: str, freq: str, date: str) -> pd.DataFrame:
-    path = get_path(symbol, freq, date)
+def read_binance_kiline(market_type: MarketType, symbol: str, freq: str, date: str) -> pd.DataFrame:
+    path = get_path(market_type, symbol, freq, date)
     if not path.exists():
-        downloader.download_binance_kline(symbol, freq, date)
-    df = load_binance_kline(symbol, freq, date)
+        match market_type:
+            case "spot":
+                download_spot_kline(symbol, freq, date)
+            case "coin_margin":
+                download_cm_kline(symbol, freq, date)
+            case "usd_margin":
+                download_um_kline(symbol, freq, date)
+            case _:
+                raise ValueError(f"未知的市场类型: {market_type}")
+    df = load_binance_kline(market_type, symbol, freq, date)
     return df
 
 
-def read_kline_range(symbol, freq, start_date, end_date):
+def read_kline_range(market_type: MarketType, symbol, freq, start_date, end_date):
     """
     读取一段时间的 K 线数据
     """
@@ -59,7 +68,7 @@ def read_kline_range(symbol, freq, start_date, end_date):
     dfs = []
     while date <= end_date:
         print(f"读取 {date} 的数据")
-        df = read_binance_kiline(symbol, freq, date)
+        df = read_binance_kiline(market_type, symbol, freq, date)
         dfs.append(df)
         date = (pd.to_datetime(date) + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
 
@@ -67,8 +76,5 @@ def read_kline_range(symbol, freq, start_date, end_date):
 
 
 if __name__ == "__main__":
-    import downloader
-
-    downloader.download_binance_kline("BTCUSDT", "1m", "2024-11-10")
-    df = load_binance_kline("BTCUSDT", "1m", "2024-11-10")
+    df = read_binance_kiline("spot", "BTCUSDT", "1m", "2024-11-10")
     print(df.head(5).to_string())
