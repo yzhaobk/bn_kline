@@ -1,8 +1,9 @@
+import os
 from pathlib import Path
 
 import requests
 
-from fetcher import fetch_coin_margin_klines, fetch_usd_margin_klines
+from fetcher import fetch_coin_margin_klines, fetch_usd_margin_klines, fetch_spot_klines
 from model import MarketType
 
 
@@ -58,11 +59,20 @@ def download_spot_kline(symbol: str, date: str, freq: str = "1m"):
     :param date: 日期, 格式为 'YYYY-MM-DD', 例如 '2024-11-10'
     :param freq: K 线频率, 例如 '1m'
     """
-
     # 构建下载 URL
-    url = f"https://data.binance.vision/data/spot/daily/klines/{symbol}/{freq}/{symbol}-{freq}-{date}.zip"
+    if date == pd.Timestamp.utcnow().strftime("%Y-%m-%d"):
+        print(date, "今天的数据还未生成")
+        return
     save_path = get_path("spot", symbol, freq, date)
-    download(url, save_path)
+    if os.path.exists(save_path):
+        print(f"文件已存在: {save_path}")
+        return
+    start = pd.Timestamp(date)
+    end = start + pd.Timedelta(days=1)
+    start = int(start.timestamp() * 1000)
+    end = int(end.timestamp() * 1000)
+    df = fetch_spot_klines(symbol, start, end, freq)
+    df.to_csv(save_path, index=False)
 
 
 def download_cm_kline(symbol: str, date: str, freq: str = '1m'):
@@ -73,14 +83,19 @@ def download_cm_kline(symbol: str, date: str, freq: str = '1m'):
     :param date: 日期, 格式为 'YYYY-MM-DD', 例如 '2024-11-10'
     :param freq: K 线频率, 例如 '1m'
     """
-
+    if date == pd.Timestamp.utcnow().strftime("%Y-%m-%d"):
+        print(date, "今天的数据还未生成")
+        return
+    save_path = get_path("coin_margin", symbol, freq, date)
+    if os.path.exists(save_path):
+        print(f"文件已存在: {save_path}")
+        return
     # 构建下载 URL
     start = pd.Timestamp(date)
     end = start + pd.Timedelta(days=1)
     start = int(start.timestamp() * 1000)
     end = int(end.timestamp() * 1000)
     df = fetch_coin_margin_klines(symbol, start, end, freq)
-    save_path = get_path("coin_margin", symbol, freq, date)
     df.to_csv(save_path, index=False)
 
 
@@ -92,21 +107,29 @@ def download_um_kline(symbol: str, date: str, freq: str = '1m'):
     :param freq: K 线频率, 例如 '1m'
     :param date: 日期, 格式为 'YYYY-MM-DD', 例如 '2024-11-10'
     """
+    if date == pd.Timestamp.utcnow().strftime("%Y-%m-%d"):
+        print(date, "今天的数据还未生成")
+        return
+    save_path = get_path("usd_margin", symbol, freq, date)
+    if os.path.exists(save_path):
+        print(f"文件已存在: {save_path}")
+        return
+
     # 构建下载 URL
     start = pd.Timestamp(date)
     end = start + pd.Timedelta(days=1)
     start = int(start.timestamp() * 1000)
     end = int(end.timestamp() * 1000)
     df = fetch_usd_margin_klines(symbol, start, end, freq)
-    save_path = get_path("usd_margin", symbol, freq, date)
+
     df.to_csv(save_path, index=False)
 
 
 if __name__ == "__main__":
     import pandas as pd
 
-    yesterday = pd.Timestamp.today()
-    week_ago = yesterday - pd.Timedelta(days=2)
+    yesterday = pd.Timestamp.utcnow().floor("D")
+    week_ago = yesterday - pd.Timedelta(days=7)
     for date in pd.date_range(week_ago, yesterday):
         download_spot_kline("BTCUSDT", date.strftime("%Y-%m-%d"))
         download_um_kline("BTCUSDT", date.strftime("%Y-%m-%d"))
