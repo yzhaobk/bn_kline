@@ -1,9 +1,10 @@
 import pandas as pd
 
-from downloader import get_path, MarketType, download_spot_kline, download_cm_kline, download_um_kline
+from downloader import get_path, download_spot_kline, download_cm_kline, download_um_kline
+from model import COL_NAMES, MarketType
 
 
-def load_binance_kline(market_type: MarketType, symbol: str, freq: str, date: str) -> pd.DataFrame:
+def load_binance_kline(market_type: MarketType, symbol: str, date: str, freq: str = '1m') -> pd.DataFrame:
     """
     从本地文件加载 Binance K 线数据
     :param market_type:
@@ -23,15 +24,8 @@ def load_binance_kline(market_type: MarketType, symbol: str, freq: str, date: st
     """
     path = get_path(market_type, symbol, freq, date)
 
-    # 定义小写列名
-    col_names = [
-        "open_time", "open", "high", "low", "close", "volume",
-        "close_time", "quote_asset_volume", "number_of_trades",
-        "buy_base_volume", "buy_quote_volume", "ignore"
-    ]
-
     # 读取数据文件
-    df = pd.read_csv(path, header=None, names=col_names)
+    df = pd.read_csv(path, header=None, names=COL_NAMES)
 
     # 将时间戳转换为可读日期格式
     df["open_time"] = pd.to_datetime(df["open_time"], unit='ms')
@@ -44,7 +38,7 @@ def load_binance_kline(market_type: MarketType, symbol: str, freq: str, date: st
     return df
 
 
-def read_binance_kiline(market_type: MarketType, symbol: str, freq: str, date: str) -> pd.DataFrame:
+def read_binance_kiline(market_type: MarketType, symbol: str, date: str, freq='1m') -> pd.DataFrame:
     path = get_path(market_type, symbol, freq, date)
     if not path.exists():
         match market_type:
@@ -60,7 +54,7 @@ def read_binance_kiline(market_type: MarketType, symbol: str, freq: str, date: s
     return df
 
 
-def read_kline_range(market_type: MarketType, symbol, freq, start_date, end_date):
+def read_kline_range(market_type: MarketType, symbol: str, start_date, end_date, freq='1m') -> pd.DataFrame:
     """
     读取一段时间的 K 线数据
     """
@@ -76,5 +70,5 @@ def read_kline_range(market_type: MarketType, symbol, freq, start_date, end_date
 
 
 if __name__ == "__main__":
-    df = read_binance_kiline("spot", "BTCUSDT", "1m", "2024-11-10")
+    df = read_binance_kiline("spot", "BTCUSDT", "2024-11-10")
     print(df.head(5).to_string())
