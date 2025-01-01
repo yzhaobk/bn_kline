@@ -113,9 +113,12 @@ def fetch_klines(market_type: MarketType, symbol, start_time, end_time, freq='1m
             data += resp
             logging.info(f"已获取 {len(resp)} 条 K线数据，从 {current_start} 到 {current_end}")
 
+            if len(resp) < LIMIT:
+                break
+
             # 更新下一个请求的 start_time
             last_timestamp = int(resp[-1][0])
-            current_start = last_timestamp + interval  # 下一个请求的开始时间
+            current_start = last_timestamp - interval  # 下一个请求的开始时间
 
             iteration += 1
 
@@ -164,6 +167,7 @@ def fetch_usd_margin_klines(symbol, start_time, end_time, freq='1m'):
     """
     return fetch_klines("usd_margin", symbol, start_time, end_time, freq)
 
+
 def fetch_spot_klines(symbol, start_time, end_time, freq='1m'):
     """
     获取 Binance Spot 市场的 K线数据
@@ -175,6 +179,7 @@ def fetch_spot_klines(symbol, start_time, end_time, freq='1m'):
     :return: 包含 K线数据的 Pandas DataFrame
     """
     return fetch_klines("spot", symbol, start_time, end_time, freq)
+
 
 if __name__ == '__main__':
     end_time = int(datetime.now(timezone.utc).timestamp() * 1000)
