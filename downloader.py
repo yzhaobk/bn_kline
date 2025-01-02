@@ -1,13 +1,11 @@
-import os
 from pathlib import Path
 
 import requests
 
-from fetcher import fetch_coin_margin_klines, fetch_usd_margin_klines, fetch_spot_klines
 from model import MarketType
 
 
-def get_path(market_type: MarketType, symbol, freq, date):
+def get_path(market_type: MarketType, symbol, date, freq='1m'):
     """
     获取用户目录
     """
@@ -45,7 +43,6 @@ def download(url, save_path):
         # 将下载的数据写入文件
         with open(save_path, "wb") as file:
             file.write(response.content)
-
         print(f"文件已下载并保存到 {save_path}")
     else:
         print(f"下载失败，HTTP 错误码: {response.status_code}")
@@ -60,19 +57,9 @@ def download_spot_kline(symbol: str, date: str, freq: str = "1m"):
     :param freq: K 线频率, 例如 '1m'
     """
     # 构建下载 URL
-    if date == pd.Timestamp.utcnow().strftime("%Y-%m-%d"):
-        print(date, "今天的数据还未生成")
-        return
+    url = f"https://data.binance.vision/data/spot/daily/klines/{symbol}/{freq}/{symbol}-{freq}-{date}.zip"
     save_path = get_path("spot", symbol, freq, date)
-    if os.path.exists(save_path):
-        print(f"文件已存在: {save_path}")
-        return
-    start = pd.Timestamp(date)
-    end = start + pd.Timedelta(days=1)
-    start = int(start.timestamp() * 1000)
-    end = int(end.timestamp() * 1000)
-    df = fetch_spot_klines(symbol, start, end, freq)
-    df.to_csv(save_path, index=False)
+    download(url, save_path)
 
 
 def download_cm_kline(symbol: str, date: str, freq: str = '1m'):
@@ -83,20 +70,10 @@ def download_cm_kline(symbol: str, date: str, freq: str = '1m'):
     :param date: 日期, 格式为 'YYYY-MM-DD', 例如 '2024-11-10'
     :param freq: K 线频率, 例如 '1m'
     """
-    if date == pd.Timestamp.utcnow().strftime("%Y-%m-%d"):
-        print(date, "今天的数据还未生成")
-        return
-    save_path = get_path("coin_margin", symbol, freq, date)
-    if os.path.exists(save_path):
-        print(f"文件已存在: {save_path}")
-        return
     # 构建下载 URL
-    start = pd.Timestamp(date)
-    end = start + pd.Timedelta(days=1)
-    start = int(start.timestamp() * 1000)
-    end = int(end.timestamp() * 1000)
-    df = fetch_coin_margin_klines(symbol, start, end, freq)
-    df.to_csv(save_path, index=False)
+    url = f"https://data.binance.vision/data/futures/cm/daily/klines/{symbol}/{freq}/{symbol}-{freq}-{date}.zip"
+    save_path = get_path("coin_margin", symbol, freq, date)
+    download(url, save_path)
 
 
 def download_um_kline(symbol: str, date: str, freq: str = '1m'):
@@ -107,22 +84,10 @@ def download_um_kline(symbol: str, date: str, freq: str = '1m'):
     :param freq: K 线频率, 例如 '1m'
     :param date: 日期, 格式为 'YYYY-MM-DD', 例如 '2024-11-10'
     """
-    if date == pd.Timestamp.utcnow().strftime("%Y-%m-%d"):
-        print(date, "今天的数据还未生成")
-        return
-    save_path = get_path("usd_margin", symbol, freq, date)
-    if os.path.exists(save_path):
-        print(f"文件已存在: {save_path}")
-        return
-
     # 构建下载 URL
-    start = pd.Timestamp(date)
-    end = start + pd.Timedelta(days=1)
-    start = int(start.timestamp() * 1000)
-    end = int(end.timestamp() * 1000)
-    df = fetch_usd_margin_klines(symbol, start, end, freq)
-
-    df.to_csv(save_path, index=False)
+    url = f"https://data.binance.vision/data/futures/um/daily/klines/{symbol}/{freq}/{symbol}-{freq}-{date}.zip"
+    save_path = get_path("usd_margin", symbol, freq, date)
+    download(url, save_path)
 
 
 if __name__ == "__main__":
