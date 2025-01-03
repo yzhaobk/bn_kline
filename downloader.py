@@ -1,8 +1,18 @@
+import asyncio
+import logging
 from pathlib import Path
 
-import requests
+import aiofiles
+import aiohttp
+import pandas as pd
+from tenacity import retry, wait_fixed, stop_after_attempt
+from tqdm.asyncio import tqdm
 
 from model import MarketType
+
+# 配置日志
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 
 def get_path(market_type: MarketType, symbol, date, freq='1m'):
@@ -24,78 +34,85 @@ def get_path(market_type: MarketType, symbol, date, freq='1m'):
     return save_path
 
 
-def download(url, save_path):
+@retry(wait=wait_fixed(5), stop=stop_after_attempt(3))
+async def download(url: str, save_path: Path, semaphore: asyncio.Semaphore = asyncio.Semaphore(10)) -> None:
     """
-    下载文件
+    异步下载文件并保存到指定路径，使用信号量限制并发数。
+
+    :param url: 下载URL
+    :param save_path: 文件保存路径
+    :param semaphore: asyncio.Semaphore 实例，默认限制为10
     """
-    if save_path.exists():
-        print(f"文件已存在: {save_path}")
-        return
+    async with semaphore:
+        if save_path.exists():
+            logger.info(f"文件已存在: {save_path}")
+            return
 
-    # 创建保存目录
-    save_path.parent.mkdir(parents=True, exist_ok=True)
+        # 创建保存目录
+        save_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # 发送 GET 请求下载文件
-    response = requests.get(url)
+        async with aiohttp.ClientSession() as session:
+            try:
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        data = await response.read()
+                        async with aiofiles.open(save_path, "wb") as file:
+                            await file.write(data)
+                        logger.info(f"文件已下载并保存到 {save_path}")
+                    else:
+                        logger.error(f"下载失败，HTTP 状态码: {response.status}，URL: {url}")
+            except Exception as e:
+                logger.error(f"下载错误: {e}，URL: {url}")
 
-    # 检查请求是否成功
-    if response.status_code == 200:
-        # 将下载的数据写入文件
-        with open(save_path, "wb") as file:
-            file.write(response.content)
-        print(f"文件已下载并保存到 {save_path}")
-    else:
-        print(f"下载失败，HTTP 错误码: {response.status_code}")
+
+async def download_kline(market_type: MarketType, symbol: str, date: str, freq: str = '1m',
+                         semaphore: asyncio.Semaphore = None) -> None:
+    save_path = get_path(market_type, symbol, date, freq)
+    match market_type:
+        case "spot":
+            url = f"https://data.binance.vision/data/spot/daily/klines/{symbol}/{freq}/{symbol}-{freq}-{date}.zip"
+            await download(url, save_path, semaphore)
+        case "coin_margin":
+            url = f"https://data.binance.vision/data/futures/cm/daily/klines/{symbol}/{freq}/{symbol}-{freq}-{date}.zip"
+            await download(url, save_path, semaphore)
+        case "usd_margin":
+            url = f"https://data.binance.vision/data/futures/um/daily/klines/{symbol}/{freq}/{symbol}-{freq}-{date}.zip"
+            await download(url, save_path, semaphore)
+        case _:
+            raise ValueError(f"未知的市场类型: {market_type}")
 
 
-def download_spot_kline(symbol: str, date: str, freq: str = "1m"):
+async def batch_download(tasks, batch_size=10):
+    for i in range(0, len(tasks), batch_size):
+        batch = tasks[i:i + batch_size]
+        await asyncio.gather(*batch)
+        logger.info(f"已完成批次 {i // batch_size + 1}")
+
+
+async def main():
     """
-    下载 Binance K 线数据并保存到用户目录下
-
-    :param symbol: 交易对符号, 例如 'BTCUSDT'
-    :param date: 日期, 格式为 'YYYY-MM-DD', 例如 '2024-11-10'
-    :param freq: K 线频率, 例如 '1m'
+    主函数：定义下载日期范围，创建下载任务，限制并发数，并执行下载。
     """
-    # 构建下载 URL
-    url = f"https://data.binance.vision/data/spot/daily/klines/{symbol}/{freq}/{symbol}-{freq}-{date}.zip"
-    save_path = get_path("spot", symbol, freq, date)
-    download(url, save_path)
+    # 定义日期范围：2024-01-01 至 2024-12-31
+    start_date = '2024-01-01'
+    end_date = '2024-12-31'
+    dates = pd.date_range(start=start_date, end=end_date)
 
+    tasks = []
+    semaphore = asyncio.Semaphore(10)  # 设置并发下载任务数为10
 
-def download_cm_kline(symbol: str, date: str, freq: str = '1m'):
-    """
-    下载 CoinMarketCap K 线数据并保存到用户目录下
+    for date in dates:
+        date_str = date.strftime("%Y-%m-%d")
+        # 创建下载任务，并传入共享的信号量
+        tasks.append(download_kline("spot", "ETHUSDT", date_str, "1m", semaphore))
+        tasks.append(download_kline("usd_margin", "ETHUSDT", date_str, "1m", semaphore))
+        tasks.append(download_kline("coin_margin", "ETHUSD_PERP", date_str, "1m", semaphore))
 
-    :param symbol: 交易对符号, 例如 'BTCUSDT'
-    :param date: 日期, 格式为 'YYYY-MM-DD', 例如 '2024-11-10'
-    :param freq: K 线频率, 例如 '1m'
-    """
-    # 构建下载 URL
-    url = f"https://data.binance.vision/data/futures/cm/daily/klines/{symbol}/{freq}/{symbol}-{freq}-{date}.zip"
-    save_path = get_path("coin_margin", symbol, freq, date)
-    download(url, save_path)
+    for f in tqdm(asyncio.as_completed(tasks), total=len(tasks), desc="Downloading Klines"):
+        await f
 
-
-def download_um_kline(symbol: str, date: str, freq: str = '1m'):
-    """
-    下载 UsdMargin K 线数据并保存到用户目录下
-
-    :param symbol: 交易对符号, 例如 'BTCUSDT'
-    :param freq: K 线频率, 例如 '1m'
-    :param date: 日期, 格式为 'YYYY-MM-DD', 例如 '2024-11-10'
-    """
-    # 构建下载 URL
-    url = f"https://data.binance.vision/data/futures/um/daily/klines/{symbol}/{freq}/{symbol}-{freq}-{date}.zip"
-    save_path = get_path("usd_margin", symbol, freq, date)
-    download(url, save_path)
+    logger.info("所有下载任务已完成。")
 
 
 if __name__ == "__main__":
-    import pandas as pd
-
-    yesterday = pd.Timestamp.utcnow().floor("D")
-    week_ago = yesterday - pd.Timedelta(days=7)
-    for date in pd.date_range(week_ago, yesterday):
-        download_spot_kline("BTCUSDT", date.strftime("%Y-%m-%d"))
-        download_um_kline("BTCUSDT", date.strftime("%Y-%m-%d"))
-        download_cm_kline("BTCUSD_PERP", date.strftime("%Y-%m-%d"))
+    asyncio.run(main())

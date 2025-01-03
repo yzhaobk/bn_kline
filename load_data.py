@@ -1,7 +1,13 @@
+import asyncio
+import logging
+
 import pandas as pd
 
-from downloader import get_path, download_spot_kline, download_cm_kline, download_um_kline
+from downloader import get_path, download_kline, batch_download
 from model import COL_NAMES, MarketType
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 
 def infer_timestamp_unit(timestamp):
@@ -63,31 +69,44 @@ def load_binance_kline(market_type: MarketType, symbol: str, date: str, freq: st
     return df
 
 
-def read_binance_kiline(market_type: MarketType, symbol: str, date: str, freq: str = '1m') -> pd.DataFrame:
-    path = get_path(market_type, symbol, freq, date)
-    if not path.exists():
-        match market_type:
-            case "spot":
-                download_spot_kline(symbol, date, freq)
-            case "coin_margin":
-                download_cm_kline(symbol, date, freq)
-            case "usd_margin":
-                download_um_kline(symbol, date, freq)
-            case _:
-                raise ValueError(f"未知的市场类型: {market_type}")
-    df = load_binance_kline(market_type, symbol, date, freq)
-    return df
-
-
-def read_kline_range(market_type: MarketType, symbol: str, start_date, end_date, freq: str = '1m') -> pd.DataFrame:
+def read_kline_data(market_type: MarketType, symbol: str, start_date, end_date=None, freq: str = '1m') -> pd.DataFrame:
     """
-    读取一段时间的 K 线数据
+    Reads K-line data for a specified period.
+
+    :param market_type: The type of market (e.g., spot, coin_margin, usd_margin).
+    :param symbol: The trading pair symbol (e.g., BTCUSDT).
+    :param start_date: The start date for the data retrieval period.
+    :param end_date: The end date for the data retrieval period. If None, defaults to start_date.
+    :param freq: The frequency of the K-line data (default is '1m' for 1 minute).
+    :return: A DataFrame containing the K-line data for the specified period.
     """
+
+    if end_date is None:
+        end_date = start_date
+
+    download_list = []
+    dates = pd.date_range(start_date, end_date)
+    for d in dates:
+        # 检查数据，如果不存在则加入下载队列
+        date_str = d.strftime("%Y-%m-%d")
+        path = get_path(market_type, symbol, date_str, freq)
+        if not path.exists():
+            logging.info(f"需要下载 {date_str} 的数据")
+            download_list.append(date_str)
+
+    if download_list:
+        tasks = []
+        logger.info(f"需要下载 {len(download_list)} 个文件")
+        for date_str in download_list:
+            tasks.append(download_kline(market_type, symbol, date_str, freq))
+        asyncio.run(batch_download(tasks))
+        logger.info("下载完成")
+
     date = start_date
     dfs = []
     while date <= end_date:
-        print(f"读取 {date} 的数据")
-        df = read_binance_kiline(market_type, symbol, freq, date)
+        logger.info(f"读取 {date} 的数据")
+        df = load_binance_kline(market_type, symbol, date, freq)
         dfs.append(df)
         date = (pd.to_datetime(date) + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
 
@@ -95,9 +114,9 @@ def read_kline_range(market_type: MarketType, symbol: str, start_date, end_date,
 
 
 if __name__ == "__main__":
-    df = read_binance_kiline("spot", "BTCUSDT", "2025-01-01")
+    df = read_kline_data("spot", "BTCUSDT", "2024-01-01")
     print(df.head(5).to_string())
-    df = read_binance_kiline("coin_margin", "BTCUSD_PERP", "2025-01-01")
+    df = read_kline_data("coin_margin", "BTCUSD_PERP", "2024-01-01")
     print(df.head(5).to_string())
-    df = read_binance_kiline("usd_margin", "BTCUSDT", "2025-01-01")
+    df = read_kline_data("usd_margin", "BTCUSDT", "2024-01-01")
     print(df.head(5).to_string())
