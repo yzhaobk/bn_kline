@@ -8,7 +8,7 @@ import pandas as pd
 from tenacity import retry, wait_fixed, stop_after_attempt
 from tqdm.asyncio import tqdm
 
-from model import MarketType
+from .model import MarketType
 
 # 配置日志
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

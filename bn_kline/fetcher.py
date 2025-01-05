@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 import pandas as pd
 import requests
 
-from model import LIMIT, COL_NAMES, MarketType
+from .model import LIMIT, COL_NAMES, MarketType
 
 # 配置日志
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

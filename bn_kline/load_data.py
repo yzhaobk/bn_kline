@@ -3,8 +3,8 @@ import logging
 
 import pandas as pd
 
-from downloader import get_path, download_kline, batch_download
-from model import COL_NAMES, MarketType
+from .downloader import get_path, download_kline, batch_download
+from .model import COL_NAMES, MarketType
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
