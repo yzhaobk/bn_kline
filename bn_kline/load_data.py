@@ -91,12 +91,11 @@ def read_kline_data(market_type: MarketType, symbol: str, start_date, end_date=N
         date_str = d.strftime("%Y-%m-%d")
         path = get_path(market_type, symbol, date_str, freq)
         if not path.exists():
-            logging.info(f"需要下载 {date_str} 的数据")
             download_list.append(date_str)
 
     if download_list:
         tasks = []
-        logger.info(f"需要下载 {len(download_list)} 个文件")
+        logger.info(f"需要下载 {len(download_list)} 个文件: {download_list}")
         for date_str in download_list:
             tasks.append(download_kline(market_type, symbol, date_str, freq))
         asyncio.run(batch_download(tasks))
@@ -104,19 +103,10 @@ def read_kline_data(market_type: MarketType, symbol: str, start_date, end_date=N
 
     date = start_date
     dfs = []
+    logger.info(f"读取 {market_type}:{symbol} {start_date} => {end_date} 的数据")
     while date <= end_date:
-        logger.info(f"读取 {date} 的数据")
         df = load_binance_kline(market_type, symbol, date, freq)
         dfs.append(df)
         date = (pd.to_datetime(date) + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
 
     return pd.concat(dfs, ignore_index=True)
-
-
-if __name__ == "__main__":
-    df = read_kline_data("spot", "BTCUSDT", "2024-01-01")
-    print(df.head(5).to_string())
-    df = read_kline_data("coin_margin", "BTCUSD_PERP", "2024-01-01")
-    print(df.head(5).to_string())
-    df = read_kline_data("usd_margin", "BTCUSDT", "2024-01-01")
-    print(df.head(5).to_string())
