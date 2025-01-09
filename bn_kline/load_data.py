@@ -54,7 +54,11 @@ def load_binance_kline(market_type: MarketType, symbol: str, date: str, freq: st
     path = get_path(market_type, symbol, date, freq)
 
     # 读取数据文件
-    df = pd.read_csv(path)
+    try:
+        df = pd.read_csv(path)
+    except Exception as e:
+        logger.error(f"{market_type}:{symbol}:{date} 读取文件错误:{e}")
+        return pd.DataFrame()
     df.columns = COL_NAMES
 
     unit = infer_timestamp_unit(df["open_time"].iloc[0])
