@@ -65,6 +65,9 @@ async def download(url: str, save_path: Path, semaphore: asyncio.Semaphore = asy
 
 async def download_kline(market_type: MarketType, symbol: str, date: str, freq: str = '1m',
                          semaphore: asyncio.Semaphore = None) -> None:
+    if semaphore is None:
+        semaphore = asyncio.Semaphore(10)
+
     save_path = get_path(market_type, symbol, date, freq)
     match market_type:
         case "spot":
