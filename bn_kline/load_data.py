@@ -98,16 +98,15 @@ def read_kline_data(market_type: MarketType, symbol: str, start_date, end_date=N
             download_list.append(date_str)
 
     if download_list:
-        tasks = []
         logger.info(f"需要下载 {len(download_list)} 个文件: {download_list}")
-        for date_str in download_list:
-            tasks.append(download_kline(market_type, symbol, date_str, freq))
-        asyncio.run(batch_download(tasks))
+        async def download_all():
+            tasks = [download_kline(market_type, symbol, date_str, freq) for date_str in download_list]
+            await batch_download(tasks)
+        asyncio.run(download_all())
         logger.info("下载完成")
-
+    logger.info(f"读取 {market_type}:{symbol} {start_date} => {end_date} 的数据")
     date = start_date
     dfs = []
-    logger.info(f"读取 {market_type}:{symbol} {start_date} => {end_date} 的数据")
     while date <= end_date:
         df = load_binance_kline(market_type, symbol, date, freq)
         dfs.append(df)
